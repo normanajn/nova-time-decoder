@@ -7,7 +7,9 @@ nova_time_decoder \- Python library to encode and decode NOvA DAQ timestamps
 .B "    unix_to_nova, nova_to_unix, nova_to_string, unix_to_string,"
 .B "    tm_to_nova, nova_to_tm, fields_to_nova, nova_to_fields,"
 .B "    current_nova_time, NOVA_EPOCH, NOVA_TIME_FACTOR, UnixTime,"
-.B "    DEFAULT_LEAP_SECONDS,"
+.B "    DEFAULT_LEAP_SECONDS, GpsTime, GPS_EPOCH, NOVA_GPS_OFFSET,"
+.B "    SECONDS_PER_WEEK, nova_to_gps, gps_to_nova, unix_to_gps,"
+.B "    gps_to_unix, gps_from_week_tow, gps_to_string,"
 .B )
 .fi
 .SH DESCRIPTION
@@ -35,9 +37,22 @@ NOvA clock ticks per second (64000000).
 Tuple of UNIX
 .I time_t
 thresholds for the leap seconds inserted after the epoch (2012, 2015, 2016).
-Every conversion function accepts a
+Every UTC-facing conversion function accepts a
 .I leap_seconds
 keyword argument to override this table.
+.TP
+.B GPS_EPOCH
+UNIX
+.I time_t
+of the GPS epoch, 06-Jan-1980 00:00:00 UTC (315964800).
+.TP
+.B NOVA_GPS_OFFSET
+GPS time, in whole seconds since the GPS epoch, of the NOvA epoch (946339215).
+Because both NOvA and GPS time are continuous (leap-second-free) timescales,
+this fixed offset fully defines the NOvA/GPS conversion.
+.TP
+.B SECONDS_PER_WEEK
+Seconds in a GPS week (604800).
 .SH TYPES
 .TP
 .B UnixTime(sec, nsec=0)
@@ -47,6 +62,17 @@ A
 .B usec
 returns
 .IR "nsec // 1000" .
+.TP
+.B GpsTime(seconds, nsec=0)
+A
+.BR typing.NamedTuple " with fields " seconds
+(whole GPS seconds since the GPS epoch, continuous/no leap seconds) and
+.B nsec
+(nanosecond remainder). Read-only properties
+.B week
+(full GPS week number, not reduced modulo 1024) and
+.B tow
+(whole-second time-of-week, 0..604799) are provided.
 .SH FUNCTIONS
 .TP
 .BI "unix_to_nova(sec, nsec=0, leap_seconds=DEFAULT_LEAP_SECONDS) -> Optional[int]"
@@ -94,6 +120,39 @@ Format a NOvA tick count as
 Format a UNIX time as
 .RB \(dq "YYYY-Mon-DD HH:MM:SS.nnnnnnnnn UTC" \(dq
 (nanosecond precision).
+.SS GPS timebase
+GPS and NOvA time are both continuous; the NOvA <-> GPS conversions are an
+exact fixed offset and take no leap-second argument. The GPS <-> UNIX
+conversions do use the leap-second table. All are defined for instants at or
+after the NOvA epoch and return
+.B None
+otherwise.
+.TP
+.BI "nova_to_gps(nova_time) -> GpsTime"
+Convert a NOvA base time to a
+.BR GpsTime .
+.TP
+.BI "gps_to_nova(seconds, nsec=0) -> Optional[int]"
+Convert a GPS time to a NOvA base time.
+.TP
+.BI "unix_to_gps(sec, nsec=0, leap_seconds=DEFAULT_LEAP_SECONDS) -> Optional[GpsTime]"
+Convert a UNIX time to a
+.BR GpsTime .
+.TP
+.BI "gps_to_unix(seconds, nsec=0, leap_seconds=DEFAULT_LEAP_SECONDS) -> Optional[UnixTime]"
+Convert a GPS time to a
+.BR UnixTime .
+.TP
+.BI "gps_from_week_tow(week, tow, nsec=0) -> GpsTime"
+Build a
+.B GpsTime
+from a full GPS week number and a time-of-week in seconds.
+.TP
+.BI "gps_to_string(gps) -> str"
+Format a
+.B GpsTime
+as
+.RB \(dq "week W, TOW ssssss.nnnnnnnnn (GGGG.nnn s)" \(dq.
 .SH PRECISION
 The original C++ used floating-point division in a few places that lose
 precision for modern (large) timestamps exceeding 2**53. This library performs

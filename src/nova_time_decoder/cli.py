@@ -2,11 +2,10 @@
 
 This is a pure-Python replacement for the ``NovaTimeConvert`` C++ tool from the
 NOvA DAQ ``NovaTimingUtilities`` package.  Given a single time value it detects
-which representation it is and prints the equivalent NOvA base time, UNIX time
-and civil calendar date.
+which representation it is and prints the equivalent NOvA base time, UNIX time,
+GPS time and civil calendar date.
 
-Three input representations are recognised (auto-detected, or forced with a
-flag):
+Input representations (auto-detected, or forced with a flag):
 
 * **datetime string** -- contains a ``:`` , e.g. ``"2010-Jul-22 14:22:30.5"``.
   The fractional second is interpreted down to one picosecond.  If the string
@@ -17,6 +16,10 @@ flag):
   nanosecond.
 * **NOvA base time** -- a bare integer, decimal or ``0x`` hex, e.g.
   ``1120208640000000`` or ``0x43d950a5b0000``.
+* **GPS time** -- only when ``--gps`` is given (GPS seconds are numerically
+  indistinguishable from UNIX seconds, so they cannot be auto-detected):
+  ``seconds[.frac]`` or ``week:tow[.frac]``, e.g. ``1025136016`` or
+  ``1695:259216``.
 
 Command-line options override environment variables which override built-in
 defaults (currently only the leap-second table is configurable this way, via
@@ -36,8 +39,15 @@ from . import __version__
 from .core import (
     DEFAULT_LEAP_SECONDS,
     NOVA_EPOCH,
+    GpsTime,
+    gps_from_week_tow,
+    gps_to_nova,
+    gps_to_string,
+    gps_to_unix,
+    nova_to_gps,
     nova_to_string,
     nova_to_unix,
+    unix_to_gps,
     unix_to_nova,
     unix_to_string,
 )
@@ -122,13 +132,21 @@ def _emit(lines, out) -> None:
         out.write(line + "\n")
 
 
+def _gps_line(gps: Optional[GpsTime]) -> str:
+    if gps is None:
+        return "  an invalid GPS time"
+    return "  a GPS time of %s" % gps_to_string(gps)
+
+
 def decode_nova(nova_time: int, leap_seconds: Sequence[int], out) -> None:
     unix = nova_to_unix(nova_time, leap_seconds)
+    gps = nova_to_gps(nova_time)
     _emit(
         [
             "",
             "A NOvA base time of %d corresponds to..." % nova_time,
             "  a UNIX time of %d sec, %d nsec" % (unix.sec, unix.nsec),
+            _gps_line(gps),
             "  a calendar date of %s" % nova_to_string(nova_time, leap_seconds),
             "",
         ],
@@ -140,11 +158,13 @@ def decode_unix(
     sec: int, nsec: int, leap_seconds: Sequence[int], out
 ) -> None:
     nova = unix_to_nova(sec, nsec, leap_seconds)
+    gps = unix_to_gps(sec, nsec, leap_seconds)
     lines = ["", "A UNIX time of %d sec, %d nsec corresponds to..." % (sec, nsec)]
     if nova is not None:
         lines.append("  a NOvA base time of %d" % nova)
     else:
         lines.append("  an invalid NOvA base time")
+    lines.append(_gps_line(gps))
     lines.append("  a calendar date of %s" % unix_to_string(sec, nsec))
     lines.append("")
     _emit(lines, out)
@@ -160,14 +180,35 @@ def decode_datetime(
     nsec = picoseconds // 1000
     lines = ["", "A time string of %s corresponds to..." % text]
     nova = unix_to_nova(unix_sec, nsec, leap_seconds) if unix_sec >= NOVA_EPOCH else None
+    gps = unix_to_gps(unix_sec, nsec, leap_seconds) if unix_sec >= NOVA_EPOCH else None
     if nova is not None:
         lines.append("  a NOvA base time of %d" % nova)
         calendar_date = nova_to_string(nova, leap_seconds)
     else:
         lines.append("  an invalid NOvA base time")
         calendar_date = unix_to_string(unix_sec, nsec)
+    lines.append(_gps_line(gps))
     lines.append("  a UNIX time of %d sec, %d nsec" % (unix_sec, nsec))
     lines.append("  a calendar date of %s" % calendar_date)
+    lines.append("")
+    _emit(lines, out)
+
+
+def decode_gps(
+    gps: GpsTime, leap_seconds: Sequence[int], out
+) -> None:
+    nova = gps_to_nova(gps.seconds, gps.nsec)
+    unix = gps_to_unix(gps.seconds, gps.nsec, leap_seconds)
+    lines = ["", "A GPS time of %s corresponds to..." % gps_to_string(gps)]
+    if nova is not None:
+        lines.append("  a NOvA base time of %d" % nova)
+    else:
+        lines.append("  an invalid NOvA base time")
+    if unix is not None:
+        lines.append("  a UNIX time of %d sec, %d nsec" % (unix.sec, unix.nsec))
+        lines.append("  a calendar date of %s" % unix_to_string(unix.sec, unix.nsec))
+    else:
+        lines.append("  an invalid UNIX time")
     lines.append("")
     _emit(lines, out)
 
@@ -181,17 +222,34 @@ def detect_mode(value: str) -> str:
     return "nova"
 
 
-def _parse_unix(value: str) -> Tuple[int, int]:
+def _sec_and_ns(value: str) -> Tuple[int, int]:
+    """Split a ``sec.frac`` (or bare ``sec``) string into (seconds, nanoseconds)."""
     dot = value.find(".")
+    if dot == -1:
+        return int(value), 0
     sec = int(value[:dot])
     frac = (value[dot + 1:] + "000000000")[:9]
     return sec, int(frac)
+
+
+def _parse_unix(value: str) -> Tuple[int, int]:
+    return _sec_and_ns(value)
 
 
 def _parse_nova(value: str) -> int:
     if "x" in value.lower():
         return int(value, 16)
     return int(value)
+
+
+def _parse_gps(value: str) -> GpsTime:
+    """Parse a GPS input: ``seconds[.frac]`` or ``week:tow[.frac]``."""
+    if ":" in value:
+        week_str, tow_str = value.split(":", 1)
+        tow_sec, nsec = _sec_and_ns(tow_str)
+        return gps_from_week_tow(int(week_str), tow_sec, nsec)
+    sec, nsec = _sec_and_ns(value)
+    return GpsTime(sec, nsec)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -205,7 +263,12 @@ def build_parser() -> argparse.ArgumentParser:
             "  nova-time-convert 1120208640000000\n"
             "  nova-time-convert 0x43d950a5b0000\n"
             "  nova-time-convert 1279807260.005\n"
-            "  nova-time-convert --now"
+            "  nova-time-convert --gps 1025136016\n"
+            "  nova-time-convert --gps 1695:259216\n"
+            "  nova-time-convert --now\n"
+            "\n"
+            "Every conversion also reports the equivalent GPS time (continuous,\n"
+            "no leap seconds), as full GPS seconds and GPS week / time-of-week."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -227,6 +290,11 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--datetime", action="store_const", const="datetime", dest="mode",
         help="force interpretation of the input as a civil datetime string",
+    )
+    mode.add_argument(
+        "--gps", action="store_const", const="gps", dest="mode",
+        help="interpret the input as a GPS time: 'seconds[.frac]' or "
+        "'week:tow[.frac]' (must be given explicitly)",
     )
     tz = parser.add_mutually_exclusive_group()
     tz.add_argument(
@@ -285,6 +353,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             decode_nova(_parse_nova(args.time), leap_seconds, sys.stdout)
         elif mode == "unix":
             decode_unix(*_parse_unix(args.time), leap_seconds=leap_seconds, out=sys.stdout)
+        elif mode == "gps":
+            decode_gps(_parse_gps(args.time), leap_seconds, sys.stdout)
         else:
             decode_datetime(args.time, force_utc, leap_seconds, sys.stdout)
     except ValueError as exc:

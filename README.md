@@ -7,7 +7,9 @@ dependencies.
 
 - **NOvA base time** — an unsigned 64-bit count of 64 MHz clock ticks since the
   NOvA epoch (01-Jan-2010 00:00:00 UTC),
-- **UNIX time** — seconds and nanoseconds since 01-Jan-1970 UTC, and
+- **UNIX time** — seconds and nanoseconds since 01-Jan-1970 UTC,
+- **GPS time** — continuous (leap-second-free) seconds since the GPS epoch
+  (06-Jan-1980 00:00:00 UTC), as total seconds or week / time-of-week, and
 - **civil calendar dates** (UTC).
 
 It is a self-contained reimplementation of the NOvA DAQ `NovaTimingUtilities`
@@ -29,7 +31,15 @@ nova-time-convert 1120208640000000
 ```console
 A NOvA base time of 1120208640000000 corresponds to...
   a UNIX time of 1279807260 sec, 0 nsec
+  a GPS time of week 1593, TOW 396075.000000000 (963842475.000000000 s)
   a calendar date of 2010-Jul-22 14:01:00.000000000000 UTC
+```
+
+Decode a GPS time with `--gps` (total seconds or `week:tow`):
+
+```bash
+nova-time-convert --gps 1025136016
+nova-time-convert --gps 1695:259216
 ```
 
 Library:
@@ -46,9 +56,14 @@ print(nova_to_string(nova))   # 2010-Jul-22 14:01:00.005000000000 UTC
 - **Zero dependencies** — standard library only; Python 3.9+.
 - **Cross-platform** — Linux, macOS, Windows 11.
 - **Auto-detecting CLI** — pass a NOvA tick count (decimal or `0x` hex), a UNIX
-  `sec.frac`, or a civil datetime string, and it prints all three forms.
-- **Full library API** — encode/decode via UNIX times, `struct tm`, broken-down
-  fields, and formatted strings, all with an overridable leap-second table.
+  `sec.frac`, or a civil datetime string, and it prints every form; GPS input
+  is available via `--gps` (`seconds` or `week:tow`).
+- **GPS timebase** — every conversion also reports GPS time (continuous, no leap
+  seconds), as total GPS seconds and GPS week / time-of-week. NOvA ↔ GPS is an
+  exact fixed offset; GPS ↔ UTC uses the leap-second table.
+- **Full library API** — encode/decode via UNIX times, GPS times, `struct tm`,
+  broken-down fields, and formatted strings, all with an overridable
+  leap-second table.
 - **Exact integer arithmetic** — avoids the floating-point precision loss the
   original C++ suffers for modern (large) timestamps, while remaining bit-for-bit
   compatible on values the C++ represented exactly.

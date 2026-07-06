@@ -11,16 +11,26 @@ import pytest
 
 from nova_time_decoder import core
 from nova_time_decoder.core import (
+    GPS_EPOCH,
     NOVA_EPOCH,
+    NOVA_GPS_OFFSET,
     NOVA_TIME_FACTOR,
+    SECONDS_PER_WEEK,
+    GpsTime,
     UnixTime,
     current_nova_time,
     fields_to_nova,
+    gps_from_week_tow,
+    gps_to_nova,
+    gps_to_string,
+    gps_to_unix,
     nova_to_fields,
+    nova_to_gps,
     nova_to_string,
     nova_to_tm,
     nova_to_unix,
     tm_to_nova,
+    unix_to_gps,
     unix_to_nova,
     unix_to_string,
 )
@@ -137,6 +147,69 @@ def _now_parts():
     t = time.time()
     sec = int(t)
     return sec, int((t - sec) * 1_000_000_000)
+
+
+def test_gps_epoch_offset():
+    # NOvA time 0 (2010-01-01) is NOVA_GPS_OFFSET GPS seconds after the GPS epoch.
+    gps = nova_to_gps(0)
+    assert gps.seconds == NOVA_GPS_OFFSET
+    assert gps.nsec == 0
+    # And the offset is the elapsed UNIX seconds + 15 leap seconds.
+    assert NOVA_GPS_OFFSET == (NOVA_EPOCH - GPS_EPOCH) + 15
+
+
+def test_nova_gps_round_trip():
+    sample = int(NOVA_TIME_FACTOR * 123456789.5)
+    gps = nova_to_gps(sample)
+    assert gps_to_nova(gps.seconds, gps.nsec) == sample
+
+
+def test_gps_is_fixed_offset_from_nova_seconds():
+    # GPS whole seconds track NOvA whole seconds with a constant offset,
+    # with no leap-second adjustment between the two continuous scales.
+    nova = NOVA_TIME_FACTOR * 78796801  # 2012-07-01 00:00:00 UTC
+    assert nova_to_gps(nova).seconds == NOVA_GPS_OFFSET + 78796801
+
+
+def test_gps_matches_standard_utc_formula_across_a_leap_second():
+    # At 2012-07-01 00:00:00 UTC, GPS-UTC == 16, so
+    # gps = unix - GPS_EPOCH + 16.
+    unix_sec = 1341100800
+    gps = unix_to_gps(unix_sec, 0)
+    assert gps.seconds == unix_sec - GPS_EPOCH + 16
+    # And one second before the 2012 leap, GPS-UTC == 15.
+    gps_before = unix_to_gps(1341100799, 0)
+    assert gps_before.seconds == 1341100799 - GPS_EPOCH + 15
+
+
+def test_unix_gps_round_trip_preserves_nanoseconds():
+    gps = unix_to_gps(1751000000, 123456789)
+    assert gps is not None
+    unix = gps_to_unix(gps.seconds, gps.nsec)
+    assert unix == UnixTime(1751000000, 123456789)
+
+
+def test_gps_week_and_tow():
+    gps = nova_to_gps(0)
+    assert gps.week == NOVA_GPS_OFFSET // SECONDS_PER_WEEK
+    assert gps.tow == NOVA_GPS_OFFSET % SECONDS_PER_WEEK
+    # Rebuild from week/tow.
+    rebuilt = gps_from_week_tow(gps.week, gps.tow, gps.nsec)
+    assert rebuilt.seconds == gps.seconds
+    assert rebuilt.nsec == gps.nsec
+
+
+def test_gps_before_nova_epoch_is_none():
+    assert gps_to_nova(NOVA_GPS_OFFSET - 1) is None
+    assert gps_to_unix(NOVA_GPS_OFFSET - 1) is None
+    assert unix_to_gps(NOVA_EPOCH - 1) is None
+
+
+def test_gps_to_string_format():
+    s = gps_to_string(GpsTime(NOVA_GPS_OFFSET, 500000000))
+    assert "week 1564" in s
+    assert "TOW 432015.500000000" in s
+    assert "%d.500000000 s" % NOVA_GPS_OFFSET in s
 
 
 def test_large_modern_timestamp_is_exact():

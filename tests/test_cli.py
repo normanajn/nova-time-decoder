@@ -81,6 +81,44 @@ def test_main_before_epoch_is_invalid(capsys):
     assert "an invalid NOvA base time" in out
 
 
+def test_parse_gps_seconds_and_week_tow():
+    g1 = cli._parse_gps("1025136016")
+    assert (g1.seconds, g1.nsec) == (1025136016, 0)
+    g2 = cli._parse_gps("1025136016.5")
+    assert (g2.seconds, g2.nsec) == (1025136016, 500000000)
+    g3 = cli._parse_gps("1695:259216")
+    assert g3.seconds == 1695 * 604800 + 259216
+
+
+def test_main_gps_seconds(capsys):
+    rc = cli.main(["--gps", "1025136016"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "A GPS time of week" in out
+    assert "a NOvA base time of" in out
+    assert "2012-Jul-01 00:00:00" in out
+
+
+def test_main_gps_week_tow_matches_seconds(capsys):
+    cli.main(["--gps", "1025136016"])
+    by_sec = capsys.readouterr().out
+    week, tow = divmod(1025136016, 604800)
+    cli.main(["--gps", "%d:%d" % (week, tow)])
+    by_wt = capsys.readouterr().out
+    # Same instant -> same NOvA base time line.
+    nova_line = [l for l in by_sec.splitlines() if "NOvA base time" in l][0]
+    assert nova_line in by_wt
+
+
+def test_every_mode_reports_gps(capsys):
+    cli.main(["1120208640000000"])
+    assert "a GPS time of" in capsys.readouterr().out
+    cli.main(["1279807260.005"])
+    assert "a GPS time of" in capsys.readouterr().out
+    cli.main(["2012-Jul-01 00:00:00 UTC"])
+    assert "a GPS time of" in capsys.readouterr().out
+
+
 def test_main_now(capsys):
     rc = cli.main(["--now"])
     assert rc == 0

@@ -21,6 +21,12 @@ a
 \(em seconds and nanoseconds since 01-Jan-1970 UTC;
 .IP \(bu 3
 a
+.B GPS time
+\(em the continuous (no-leap-second) count of seconds since the GPS epoch
+(06-Jan-1980 00:00:00 UTC), reported both as total GPS seconds and as GPS
+week number plus time-of-week;
+.IP \(bu 3
+a
 .B civil calendar date
 in UTC.
 .RE
@@ -31,6 +37,9 @@ tool from the NOvA DAQ
 .B NovaTimingUtilities
 package. NOvA time does not include leap seconds, whereas UNIX time does; the
 conversion adds or removes the leap seconds inserted after the NOvA epoch.
+GPS time, like NOvA time, is a continuous timescale, so the NOvA/GPS
+relationship is a fixed offset and needs no leap seconds; the GPS/UTC
+conversion does use the leap-second table.
 .SH INPUT DETECTION
 When no mode flag is given, the representation of
 .I TIME
@@ -59,6 +68,15 @@ integer, in decimal or
 .RB \(dq 0x \(dq
 hexadecimal.
 .RE
+.PP
+GPS input is never auto-detected (GPS seconds are numerically
+indistinguishable from UNIX seconds); it must be requested with
+.BR \-\-gps ,
+as either
+.I seconds[.frac]
+or
+.IR week:tow[.frac] .
+Every conversion, whatever the input, reports the equivalent GPS time.
 .SH OPTIONS
 .TP
 .B \-\-nova
@@ -77,6 +95,15 @@ time.
 Force interpretation of
 .I TIME
 as a civil datetime string.
+.TP
+.B \-\-gps
+Interpret
+.I TIME
+as a GPS time, given either as
+.I seconds[.frac]
+(GPS seconds since the GPS epoch) or as
+.I week:tow[.frac]
+(GPS week number and time-of-week in seconds).
 .TP
 .B \-\-utc
 Interpret a datetime string as UTC, overriding suffix detection.
@@ -136,6 +163,15 @@ Encode a civil datetime in UTC:
 .RS
 .EX
 nova-time-convert "2010-Jul-22 14:22:30.000000015625 UTC"
+.EE
+.RE
+.PP
+Decode a GPS time (total seconds, or week and time-of-week):
+.PP
+.RS
+.EX
+nova-time-convert --gps 1025136016
+nova-time-convert --gps 1695:259216
 .EE
 .RE
 .PP
