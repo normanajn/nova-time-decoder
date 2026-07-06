@@ -1,0 +1,115 @@
+.TH NOVA_TIME_DECODER 3 "July 2026" "nova_time_decoder 1.0.0" "Python Library"
+.SH NAME
+nova_time_decoder \- Python library to encode and decode NOvA DAQ timestamps
+.SH SYNOPSIS
+.nf
+.B from nova_time_decoder import (
+.B "    unix_to_nova, nova_to_unix, nova_to_string, unix_to_string,"
+.B "    tm_to_nova, nova_to_tm, fields_to_nova, nova_to_fields,"
+.B "    current_nova_time, NOVA_EPOCH, NOVA_TIME_FACTOR, UnixTime,"
+.B "    DEFAULT_LEAP_SECONDS,"
+.B )
+.fi
+.SH DESCRIPTION
+.B nova_time_decoder
+is a self-contained, pure-Python (standard-library-only) reimplementation of
+the
+.B novadaq::timeutils
+C++ library from the NOvA DAQ
+.B NovaTimingUtilities
+package. A NOvA timestamp is an unsigned 64-bit count of 64 MHz clock ticks
+since the NOvA epoch (01-Jan-2010 00:00:00 UTC). NOvA time contains no leap
+seconds; UNIX time does, so post-epoch leap seconds are added or removed during
+conversion.
+.SH CONSTANTS
+.TP
+.B NOVA_EPOCH
+UNIX
+.I time_t
+of the NOvA epoch (1262304000).
+.TP
+.B NOVA_TIME_FACTOR
+NOvA clock ticks per second (64000000).
+.TP
+.B DEFAULT_LEAP_SECONDS
+Tuple of UNIX
+.I time_t
+thresholds for the leap seconds inserted after the epoch (2012, 2015, 2016).
+Every conversion function accepts a
+.I leap_seconds
+keyword argument to override this table.
+.SH TYPES
+.TP
+.B UnixTime(sec, nsec=0)
+A
+.BR typing.NamedTuple " with fields " sec " (UNIX seconds) and " nsec
+(nanosecond remainder). The read-only property
+.B usec
+returns
+.IR "nsec // 1000" .
+.SH FUNCTIONS
+.TP
+.BI "unix_to_nova(sec, nsec=0, leap_seconds=DEFAULT_LEAP_SECONDS) -> Optional[int]"
+Convert a UNIX time to a NOvA tick count. Returns
+.B None
+if the input predates the NOvA epoch.
+.TP
+.BI "nova_to_unix(nova_time, leap_seconds=DEFAULT_LEAP_SECONDS) -> UnixTime"
+Convert a NOvA tick count to a
+.BR UnixTime .
+.TP
+.BI "tm_to_nova(tm, leap_seconds=DEFAULT_LEAP_SECONDS) -> Optional[int]"
+Convert a UTC
+.B time.struct_time
+to a NOvA tick count.
+.TP
+.BI "nova_to_tm(nova_time, leap_seconds=DEFAULT_LEAP_SECONDS) -> time.struct_time"
+Convert a NOvA tick count to a UTC
+.BR time.struct_time .
+.TP
+.BI "fields_to_nova(sec, minute, hour, mday, mon, year, leap_seconds=...) -> Optional[int]"
+Convert broken-down UTC calendar fields (C
+.B struct tm
+conventions:
+.I mon
+is 0-11,
+.I year
+is years since 1900) to a NOvA tick count.
+.TP
+.BI "nova_to_fields(nova_time, leap_seconds=...) -> tuple"
+Inverse of
+.BR fields_to_nova ;
+returns
+.IR "(sec, minute, hour, mday, mon, year)" .
+.TP
+.BI "current_nova_time(leap_seconds=DEFAULT_LEAP_SECONDS) -> int"
+Return the current wall-clock time as a NOvA tick count.
+.TP
+.BI "nova_to_string(nova_time, leap_seconds=...) -> str"
+Format a NOvA tick count as
+.RB \(dq "YYYY-Mon-DD HH:MM:SS.pppppppppppp UTC" \(dq
+(picosecond precision).
+.TP
+.BI "unix_to_string(sec, nsec=0) -> str"
+Format a UNIX time as
+.RB \(dq "YYYY-Mon-DD HH:MM:SS.nnnnnnnnn UTC" \(dq
+(nanosecond precision).
+.SH PRECISION
+The original C++ used floating-point division in a few places that lose
+precision for modern (large) timestamps exceeding 2**53. This library performs
+the equivalent operations in exact integer arithmetic: it is bit-for-bit
+compatible on every value the C++ represented exactly and strictly more
+accurate elsewhere.
+.SH EXAMPLE
+.nf
+.B >>> from nova_time_decoder import unix_to_nova, nova_to_string
+.B >>> nova = unix_to_nova(1279807260, 5000000)
+.B >>> nova
+.B 1120208640320000
+.B >>> nova_to_string(nova)
+.B '2010-Jul-22 14:01:00.005000000000 UTC'
+.fi
+.SH SEE ALSO
+.BR nova-time-convert (1)
+.SH AUTHOR
+Andrew Norman. Reimplementation of the NOvA DAQ NovaTimingUtilities package.

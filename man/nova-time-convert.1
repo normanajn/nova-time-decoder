@@ -1,0 +1,152 @@
+.TH NOVA-TIME-CONVERT 1 "July 2026" "nova_time_decoder 1.0.0" "User Commands"
+.SH NAME
+nova-time-convert \- encode and decode NOvA DAQ timestamps
+.SH SYNOPSIS
+.B nova-time-convert
+.RI [ OPTIONS ]
+.RI [ TIME ]
+.SH DESCRIPTION
+.B nova-time-convert
+converts between three representations of an instant in time and prints all of
+them:
+.RS
+.IP \(bu 3
+a
+.B NOvA base time
+\(em an unsigned 64-bit count of 64 MHz clock ticks since the NOvA epoch
+(01-Jan-2010 00:00:00 UTC);
+.IP \(bu 3
+a
+.B UNIX time
+\(em seconds and nanoseconds since 01-Jan-1970 UTC;
+.IP \(bu 3
+a
+.B civil calendar date
+in UTC.
+.RE
+.PP
+It is a self-contained, pure-Python reimplementation of the
+.B NovaTimeConvert
+tool from the NOvA DAQ
+.B NovaTimingUtilities
+package. NOvA time does not include leap seconds, whereas UNIX time does; the
+conversion adds or removes the leap seconds inserted after the NOvA epoch.
+.SH INPUT DETECTION
+When no mode flag is given, the representation of
+.I TIME
+is auto-detected:
+.RS
+.IP \(bu 3
+If it contains a colon it is a
+.B datetime string
+of the form
+.RB \(dq yyyy-mmm-dd\ HH:MM:SS.frac\ [UTC] \(dq
+(fraction down to one picosecond). Without a
+.B UTC
+suffix (or the
+.B \-\-utc
+flag) it is interpreted as local time.
+.IP \(bu 3
+Otherwise, if it contains a dot it is a
+.B UNIX time
+of the form
+.IR sec.frac
+(fraction down to one nanosecond).
+.IP \(bu 3
+Otherwise it is a
+.B NOvA base time
+integer, in decimal or
+.RB \(dq 0x \(dq
+hexadecimal.
+.RE
+.SH OPTIONS
+.TP
+.B \-\-nova
+Force interpretation of
+.I TIME
+as a NOvA base time.
+.TP
+.B \-\-unix
+Force interpretation of
+.I TIME
+as a UNIX
+.I sec.frac
+time.
+.TP
+.B \-\-datetime
+Force interpretation of
+.I TIME
+as a civil datetime string.
+.TP
+.B \-\-utc
+Interpret a datetime string as UTC, overriding suffix detection.
+.TP
+.B \-\-local
+Interpret a datetime string as local time.
+.TP
+.B \-\-now
+Use the current wall-clock time as the input (printed as a NOvA base time).
+.TP
+.BI \-\-leap\-seconds " T1,T2,..."
+Override the leap-second table with a comma-separated list of UNIX
+.I time_t
+thresholds (the last second before each inserted leap second). Overrides the
+.B NOVA_LEAP_SECONDS
+environment variable.
+.TP
+.B \-\-version
+Print the program version and exit.
+.TP
+.B \-h ", " \-\-help
+Print a usage summary and exit.
+.SH ENVIRONMENT
+.TP
+.B NOVA_LEAP_SECONDS
+Default leap-second table, in the same format as
+.BR \-\-leap\-seconds .
+A command-line option, if present, takes precedence.
+.SH EXIT STATUS
+.TP
+.B 0
+Successful conversion.
+.TP
+.B 2
+No input was supplied (usage printed) or an argument could not be parsed.
+.SH EXAMPLES
+.PP
+Decode a NOvA base time (decimal or hexadecimal):
+.PP
+.RS
+.EX
+nova-time-convert 1120208640000000
+nova-time-convert 0x43d950a5b0000
+.EE
+.RE
+.PP
+Encode a UNIX time:
+.PP
+.RS
+.EX
+nova-time-convert 1279807260.005
+.EE
+.RE
+.PP
+Encode a civil datetime in UTC:
+.PP
+.RS
+.EX
+nova-time-convert "2010-Jul-22 14:22:30.000000015625 UTC"
+.EE
+.RE
+.PP
+Show the current time:
+.PP
+.RS
+.EX
+nova-time-convert --now
+.EE
+.RE
+.SH SEE ALSO
+.BR nova_time_decoder (3)
+.SH AUTHOR
+Andrew Norman. Reimplementation of the NOvA DAQ NovaTimingUtilities package.

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nova-time-decoder"
+version = "1.0.0"
+description = "Self-contained, pure-Python encoder/decoder for NOvA DAQ timestamps"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Andrew Norman", email = "normanajn@gmail.com" }]
+keywords = ["nova", "daq", "fermilab", "timestamp", "novatime"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+nova-time-convert = "nova_time_decoder.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/normanajn/nova-time-decoder"
+Source = "https://github.com/normanajn/nova-time-decoder"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
