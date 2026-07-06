@@ -129,3 +129,73 @@ def test_main_now(capsys):
 def test_main_no_args_prints_help(capsys):
     rc = cli.main([])
     assert rc == 2
+
+
+# --- single-value output flags ---------------------------------------------
+
+def test_output_nova_is_just_the_value(capsys):
+    rc = cli.main(["--output-nova", "1279807260.005"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # Exactly one line, the bare integer, no descriptive text.
+    assert out == "1120208640320000\n"
+
+
+def test_output_gps_seconds(capsys):
+    rc = cli.main(["--output-gps", "1120208640000000"])
+    assert rc == 0
+    assert capsys.readouterr().out == "963842475\n"
+
+
+def test_output_gps_with_fraction(capsys):
+    cli.main(["--output-gps", "1279807260.005"])
+    assert capsys.readouterr().out == "963842475.005000000\n"
+
+
+def test_output_utc(capsys):
+    cli.main(["--output-utc", "1120208640000000"])
+    assert capsys.readouterr().out == "2010-Jul-22 14:01:00.000000000000 UTC\n"
+
+
+def test_output_utc_from_gps_input(capsys):
+    cli.main(["--gps", "--output-utc", "1025136016"])
+    assert capsys.readouterr().out == "2012-Jul-01 00:00:00.000000000000 UTC\n"
+
+
+def test_output_local_is_single_wellformed_line(capsys):
+    cli.main(["--output-local", "1120208640000000"])
+    out = capsys.readouterr().out
+    assert out.count("\n") == 1
+    # 14:01 UTC lands on Jul-22 or Jul-23 depending on the local zone.
+    assert out.startswith("2010-Jul-2")
+    assert ".000000000 " in out  # nanosecond field + trailing tz token
+
+
+def test_output_now(capsys):
+    rc = cli.main(["--now", "--output-nova"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    assert out.isdigit()
+
+
+def test_output_before_epoch_has_no_nova(capsys):
+    rc = cli.main(["--output-nova", "2000-Jan-01 00:00:00 UTC"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "before the NOvA epoch" in err
+
+
+def test_output_before_epoch_utc_still_works(capsys):
+    rc = cli.main(["--output-utc", "2000-Jan-01 00:00:00 UTC"])
+    assert rc == 0
+    assert capsys.readouterr().out == "2000-Jan-01 00:00:00.000000000 UTC\n"
+
+
+def test_output_flags_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        cli.main(["--output-nova", "--output-gps", "1120208640000000"])
+
+
+def test_output_without_input_errors():
+    with pytest.raises(SystemExit):
+        cli.main(["--output-nova"])

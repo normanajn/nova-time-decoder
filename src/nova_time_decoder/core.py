@@ -58,6 +58,7 @@ __all__ = [
     "current_nova_time",
     "nova_to_string",
     "unix_to_string",
+    "unix_to_local_string",
     "nova_to_gps",
     "gps_to_nova",
     "unix_to_gps",
@@ -321,6 +322,26 @@ def unix_to_string(sec: int, nsec: int = 0) -> str:
     adjustment is applied -- the value is treated as a raw UNIX time.
     """
     return "%s.%09d UTC" % (_format_civil(sec), nsec)
+
+
+def unix_to_local_string(sec: int, nsec: int = 0) -> str:
+    """Format a UNIX time in the local timezone.
+
+    Renders as ``YYYY-Mon-DD HH:MM:SS.nnnnnnnnn TZ`` where ``TZ`` is the local
+    timezone abbreviation.  The fractional part is expressed in nanoseconds
+    (9 digits).
+    """
+    tm = time.localtime(sec)
+    civil = "%04d-%s-%02d %02d:%02d:%02d" % (
+        tm.tm_year,
+        _MONTH_ABBR[tm.tm_mon - 1],
+        tm.tm_mday,
+        tm.tm_hour,
+        tm.tm_min,
+        tm.tm_sec,
+    )
+    tzname = time.strftime("%Z", tm)
+    return "%s.%09d %s" % (civil, nsec, tzname)
 
 
 # ---------------------------------------------------------------------------

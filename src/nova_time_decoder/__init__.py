@@ -37,11 +37,12 @@ from .core import (
     nova_to_unix,
     tm_to_nova,
     unix_to_gps,
+    unix_to_local_string,
     unix_to_nova,
     unix_to_string,
 )
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 __all__ = [
     "__version__",
@@ -62,6 +63,7 @@ __all__ = [
     "current_nova_time",
     "nova_to_string",
     "unix_to_string",
+    "unix_to_local_string",
     "nova_to_gps",
     "gps_to_nova",
     "unix_to_gps",

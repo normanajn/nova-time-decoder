@@ -120,6 +120,13 @@ Format a NOvA tick count as
 Format a UNIX time as
 .RB \(dq "YYYY-Mon-DD HH:MM:SS.nnnnnnnnn UTC" \(dq
 (nanosecond precision).
+.TP
+.BI "unix_to_local_string(sec, nsec=0) -> str"
+Format a UNIX time in the local timezone as
+.RB \(dq "YYYY-Mon-DD HH:MM:SS.nnnnnnnnn TZ" \(dq,
+where
+.I TZ
+is the local timezone abbreviation.
 .SS GPS timebase
 GPS and NOvA time are both continuous; the NOvA <-> GPS conversions are an
 exact fixed offset and take no leap-second argument. The GPS <-> UNIX

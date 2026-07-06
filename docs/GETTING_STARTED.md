@@ -108,6 +108,37 @@ nova-time-convert --gps 1695:259216                     # GPS week:time-of-week
 nova-time-convert --now                                 # current time
 ```
 
+### Printing a single value (for scripting)
+
+By default the tool prints a short report of every representation. To get just
+one value — with no surrounding text, on a single line — use one of the
+mutually exclusive `--output-*` flags:
+
+| Flag              | Prints                                            |
+|-------------------|---------------------------------------------------|
+| `--output-nova`   | the NOvA base time (tick count)                   |
+| `--output-gps`    | the GPS time in seconds since the GPS epoch       |
+| `--output-utc`    | the UTC calendar date string                      |
+| `--output-local`  | the local-time calendar date string (with TZ)     |
+
+```console
+$ nova-time-convert --output-nova 1279807260.005
+1120208640320000
+
+$ nova-time-convert --output-gps 1120208640000000
+963842475
+
+$ nova-time-convert --now --output-utc
+2026-Jul-06 20:25:04.109338984375 UTC
+
+$ nova-time-convert --gps --output-utc 1025136016
+2012-Jul-01 00:00:00.000000000000 UTC
+```
+
+If the requested representation does not exist for the instant (e.g. a NOvA or
+GPS value for a time before the NOvA epoch), the tool prints an error to stderr
+and exits with status 1.
+
 See `man nova-time-convert` (or `man/nova-time-convert.1`) for the full
 reference, including the `--leap-seconds` / `NOVA_LEAP_SECONDS` override.
 

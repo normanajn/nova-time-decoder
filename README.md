@@ -58,6 +58,8 @@ print(nova_to_string(nova))   # 2010-Jul-22 14:01:00.005000000000 UTC
 - **Auto-detecting CLI** — pass a NOvA tick count (decimal or `0x` hex), a UNIX
   `sec.frac`, or a civil datetime string, and it prints every form; GPS input
   is available via `--gps` (`seconds` or `week:tow`).
+- **Scriptable output** — `--output-nova`, `--output-gps`, `--output-utc`, and
+  `--output-local` each print just that one value, with no surrounding text.
 - **GPS timebase** — every conversion also reports GPS time (continuous, no leap
   seconds), as total GPS seconds and GPS week / time-of-week. NOvA ↔ GPS is an
   exact fixed offset; GPS ↔ UTC uses the leap-second table.

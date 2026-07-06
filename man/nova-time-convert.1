@@ -76,7 +76,11 @@ as either
 .I seconds[.frac]
 or
 .IR week:tow[.frac] .
-Every conversion, whatever the input, reports the equivalent GPS time.
+By default every conversion, whatever the input, reports all representations
+(NOvA, UNIX, GPS and civil date). When one of the
+.B \-\-output\-*
+options is given, only that single value is printed with no surrounding text
+(see OUTPUT SELECTION).
 .SH OPTIONS
 .TP
 .B \-\-nova
@@ -113,6 +117,27 @@ Interpret a datetime string as local time.
 .TP
 .B \-\-now
 Use the current wall-clock time as the input (printed as a NOvA base time).
+.SS Output selection
+These options are mutually exclusive. When one is given, the program prints
+.B only
+that value, on a single line with no surrounding text, which is convenient for
+scripting. If the requested representation does not exist for the instant
+(for example a NOvA or GPS value for a time before the NOvA epoch), an error is
+printed to standard error and the exit status is 1.
+.TP
+.B \-\-output\-nova
+Print only the NOvA base time (tick count).
+.TP
+.B \-\-output\-gps
+Print only the GPS time, in seconds since the GPS epoch (with a fractional part
+only when nonzero).
+.TP
+.B \-\-output\-utc
+Print only the UTC calendar date string.
+.TP
+.B \-\-output\-local
+Print only the local-time calendar date string (with the local timezone
+abbreviation).
 .TP
 .BI \-\-leap\-seconds " T1,T2,..."
 Override the leap-second table with a comma-separated list of UNIX
@@ -136,6 +161,11 @@ A command-line option, if present, takes precedence.
 .TP
 .B 0
 Successful conversion.
+.TP
+.B 1
+An
+.B \-\-output\-*
+representation does not exist for the given instant.
 .TP
 .B 2
 No input was supplied (usage printed) or an argument could not be parsed.
@@ -180,6 +210,15 @@ Show the current time:
 .RS
 .EX
 nova-time-convert --now
+.EE
+.RE
+.PP
+Print only a single value (for scripting):
+.PP
+.RS
+.EX
+nova-time-convert --output-gps 1120208640000000
+nova-time-convert --now --output-utc
 .EE
 .RE
 .SH SEE ALSO

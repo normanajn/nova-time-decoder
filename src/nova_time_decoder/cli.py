@@ -21,6 +21,11 @@ Input representations (auto-detected, or forced with a flag):
   ``seconds[.frac]`` or ``week:tow[.frac]``, e.g. ``1025136016`` or
   ``1695:259216``.
 
+By default all representations are printed as a short report.  The
+``--output-nova``, ``--output-gps``, ``--output-utc`` and ``--output-local``
+flags instead print *only* that single value (with no surrounding text), which
+is convenient for scripting; they are mutually exclusive.
+
 Command-line options override environment variables which override built-in
 defaults (currently only the leap-second table is configurable this way, via
 ``--leap-seconds`` / ``NOVA_LEAP_SECONDS``).
@@ -33,13 +38,15 @@ import calendar
 import os
 import sys
 import time
-from typing import Optional, Sequence, Tuple
+from typing import NamedTuple, Optional, Sequence, Tuple
 
 from . import __version__
 from .core import (
     DEFAULT_LEAP_SECONDS,
     NOVA_EPOCH,
     GpsTime,
+    UnixTime,
+    current_nova_time,
     gps_from_week_tow,
     gps_to_nova,
     gps_to_string,
@@ -48,6 +55,7 @@ from .core import (
     nova_to_string,
     nova_to_unix,
     unix_to_gps,
+    unix_to_local_string,
     unix_to_nova,
     unix_to_string,
 )
@@ -213,6 +221,73 @@ def decode_gps(
     _emit(lines, out)
 
 
+class Resolved(NamedTuple):
+    """An instant resolved into every representation (each may be ``None``)."""
+
+    nova: Optional[int]
+    unix: Optional[UnixTime]
+    gps: Optional[GpsTime]
+
+
+def _resolve_from_nova(nova: int, leap_seconds: Sequence[int]) -> Resolved:
+    return Resolved(nova, nova_to_unix(nova, leap_seconds), nova_to_gps(nova))
+
+
+def _resolve_from_unix(sec: int, nsec: int, leap_seconds: Sequence[int]) -> Resolved:
+    return Resolved(
+        unix_to_nova(sec, nsec, leap_seconds),
+        UnixTime(sec, nsec),
+        unix_to_gps(sec, nsec, leap_seconds),
+    )
+
+
+def _resolve_from_gps(gps: GpsTime, leap_seconds: Sequence[int]) -> Resolved:
+    return Resolved(
+        gps_to_nova(gps.seconds, gps.nsec),
+        gps_to_unix(gps.seconds, gps.nsec, leap_seconds),
+        gps,
+    )
+
+
+def _out_error(message: str) -> int:
+    sys.stderr.write("nova-time-convert: %s\n" % message)
+    return 1
+
+
+def emit_output_value(
+    which: str, resolved: Resolved, leap_seconds: Sequence[int], out
+) -> int:
+    """Print only the requested representation of ``resolved``.
+
+    Returns 0 on success, or 1 if the instant has no such representation
+    (e.g. a NOvA or GPS value for a time before the NOvA epoch).
+    """
+    if which == "nova":
+        if resolved.nova is None:
+            return _out_error("no NOvA base time: the instant is before the NOvA epoch")
+        out.write("%d\n" % resolved.nova)
+    elif which == "gps":
+        gps = resolved.gps
+        if gps is None:
+            return _out_error("no GPS time: the instant is before the NOvA epoch")
+        if gps.nsec:
+            out.write("%d.%09d\n" % (gps.seconds, gps.nsec))
+        else:
+            out.write("%d\n" % gps.seconds)
+    elif which == "utc":
+        if resolved.nova is not None:
+            out.write(nova_to_string(resolved.nova, leap_seconds) + "\n")
+        elif resolved.unix is not None:
+            out.write(unix_to_string(resolved.unix.sec, resolved.unix.nsec) + "\n")
+        else:
+            return _out_error("no UTC calendar date for this instant")
+    elif which == "local":
+        if resolved.unix is None:
+            return _out_error("no local calendar date for this instant")
+        out.write(unix_to_local_string(resolved.unix.sec, resolved.unix.nsec) + "\n")
+    return 0
+
+
 def detect_mode(value: str) -> str:
     """Auto-detect the representation of ``value``: nova, unix or datetime."""
     if ":" in value:
@@ -266,9 +341,13 @@ def build_parser() -> argparse.ArgumentParser:
             "  nova-time-convert --gps 1025136016\n"
             "  nova-time-convert --gps 1695:259216\n"
             "  nova-time-convert --now\n"
+            "  nova-time-convert --output-gps 1120208640000000\n"
+            "  nova-time-convert --now --output-utc\n"
             "\n"
-            "Every conversion also reports the equivalent GPS time (continuous,\n"
-            "no leap seconds), as full GPS seconds and GPS week / time-of-week."
+            "Without an --output-* flag, every conversion reports all\n"
+            "representations, including the GPS time (continuous, no leap\n"
+            "seconds) as full GPS seconds and GPS week / time-of-week.\n"
+            "With an --output-* flag, only that single value is printed."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -309,6 +388,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--now", action="store_true",
         help="use the current time as the input (as a NOvA base time)",
     )
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument(
+        "--output-nova", action="store_const", const="nova", dest="output",
+        help="print only the NOvA base time (tick count)",
+    )
+    output.add_argument(
+        "--output-gps", action="store_const", const="gps", dest="output",
+        help="print only the GPS time (seconds since the GPS epoch)",
+    )
+    output.add_argument(
+        "--output-utc", action="store_const", const="utc", dest="output",
+        help="print only the UTC calendar date string",
+    )
+    output.add_argument(
+        "--output-local", action="store_const", const="local", dest="output",
+        help="print only the local-time calendar date string",
+    )
     parser.add_argument(
         "--leap-seconds", metavar="T1,T2,...",
         default=os.environ.get("NOVA_LEAP_SECONDS"),
@@ -337,28 +433,44 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     elif args.local:
         force_utc = False
 
-    if args.now:
-        from .core import current_nova_time
-        decode_nova(current_nova_time(leap_seconds), leap_seconds, sys.stdout)
-        return 0
-
-    if args.time is None:
-        parser.print_help(sys.stderr)
-        return 2
-
-    mode = args.mode or detect_mode(args.time)
-
+    # Resolve the input into a canonical instant plus a matching full-report
+    # renderer.  ``full`` is only used when no --output-* flag was given.
     try:
-        if mode == "nova":
-            decode_nova(_parse_nova(args.time), leap_seconds, sys.stdout)
-        elif mode == "unix":
-            decode_unix(*_parse_unix(args.time), leap_seconds=leap_seconds, out=sys.stdout)
-        elif mode == "gps":
-            decode_gps(_parse_gps(args.time), leap_seconds, sys.stdout)
+        if args.now:
+            nova = current_nova_time(leap_seconds)
+            resolved = _resolve_from_nova(nova, leap_seconds)
+            full = lambda: decode_nova(nova, leap_seconds, sys.stdout)
+        elif args.time is None:
+            if args.output:
+                parser.error("no input time given")
+            parser.print_help(sys.stderr)
+            return 2
         else:
-            decode_datetime(args.time, force_utc, leap_seconds, sys.stdout)
+            mode = args.mode or detect_mode(args.time)
+            if mode == "nova":
+                nova = _parse_nova(args.time)
+                resolved = _resolve_from_nova(nova, leap_seconds)
+                full = lambda: decode_nova(nova, leap_seconds, sys.stdout)
+            elif mode == "unix":
+                sec, nsec = _parse_unix(args.time)
+                resolved = _resolve_from_unix(sec, nsec, leap_seconds)
+                full = lambda: decode_unix(sec, nsec, leap_seconds, sys.stdout)
+            elif mode == "gps":
+                gps = _parse_gps(args.time)
+                resolved = _resolve_from_gps(gps, leap_seconds)
+                full = lambda: decode_gps(gps, leap_seconds, sys.stdout)
+            else:
+                unix_sec, picoseconds = datetime_string_to_unix(args.time, force_utc)
+                resolved = _resolve_from_unix(unix_sec, picoseconds // 1000, leap_seconds)
+                full = lambda: decode_datetime(
+                    args.time, force_utc, leap_seconds, sys.stdout
+                )
     except ValueError as exc:
         parser.error(str(exc))
+
+    if args.output:
+        return emit_output_value(args.output, resolved, leap_seconds, sys.stdout)
+    full()
     return 0
 
 

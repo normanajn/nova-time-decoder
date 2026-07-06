@@ -136,6 +136,21 @@ def test_unix_to_string():
     assert unix_to_string(NOVA_EPOCH, 5000000) == "2010-Jan-01 00:00:00.005000000 UTC"
 
 
+def test_unix_to_local_string_under_utc_tz(monkeypatch):
+    if not hasattr(time, "tzset"):
+        pytest.skip("time.tzset() not available on this platform")
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    try:
+        s = core.unix_to_local_string(NOVA_EPOCH, 5000000)
+        assert s.startswith("2010-Jan-01 00:00:00.005000000")
+        assert s.endswith("UTC")
+    finally:
+        # Restore the process timezone for any later tests.
+        monkeypatch.undo()
+        time.tzset()
+
+
 def test_current_nova_time_monotonic():
     before = unix_to_nova(*_now_parts())
     now = current_nova_time()
